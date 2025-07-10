@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NovelQA API Tester</title>
+    <title>LLM API Tester - NovelQA & Fact Validation</title>
     <style>
         body {
             font-family: sans-serif;
@@ -19,6 +19,13 @@
             padding: 15px;
             border: 1px solid #ccc;
             border-radius: 5px;
+            background-color: #f9f9f9;
+            /* Added a light background for clarity */
+        }
+
+        h1,
+        h2 {
+            color: #333;
         }
 
         textarea {
@@ -27,12 +34,14 @@
             margin-bottom: 10px;
             padding: 5px;
             border: 1px solid #ddd;
+            border-radius: 3px;
         }
 
         label {
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            color: #555;
         }
 
         input[type="text"],
@@ -76,123 +85,120 @@
             width: 70%;
         }
 
-        .hidden {
-            display: none;
-        }
-
         .status {
             margin-top: 10px;
             font-style: italic;
+            color: #666;
+        }
+
+        .error-message {
+            color: red;
+            font-weight: bold;
         }
     </style>
 </head>
 
 <body>
-    <h1>NovelQA API 测试工具</h1>
+    <h1>LLM API 测试工具</h1>
 
     <div class="container">
-        <label for="apiUrl">API 端点 URL:</label>
+        <label for="apiUrl">API 端点 URL (例如：`http://localhost:8080/v1/chat/completions`):</label>
         <div class="api-url">
             <input type="text" id="apiUrl" value="https://xpxpxp88.pythonanywhere.com/v1/chat/completions">
         </div>
-
-        <label for="txtFile">1. 上传你的 TXT 文件 (作为上下文):</label>
-        <input type="file" id="txtFile" accept=".txt">
-
-        <label for="question">2. 输入你的问题:</label>
-        <input type="text" id="question" placeholder="基于文档内容的问题...">
     </div>
 
+    <!-- NovelQA Section -->
     <div class="container">
-        <button onclick="sendRequest()">发送请求到 API</button>
+        <h2>NovelQA 测试</h2>
+        <p>用于基于长文本回答问题。</p>
+        <label for="novelQATxtFile">1. 上传你的 TXT 文件 (作为上下文):</label>
+        <input type="file" id="novelQATxtFile" accept=".txt">
+
+        <label for="novelQAQuestion">2. 输入你的问题:</label>
+        <input type="text" id="novelQAQuestion" placeholder="基于文档内容的问题...">
+
+        <button onclick="sendNovelQARequest()">发送 NovelQA 请求</button>
+
+        <label>来自 API 的 NovelQA 答案:</label>
+        <div id="novelQAStatus" class="status"></div>
+        <pre id="novelQAResponse">这里将显示 API 的 NovelQA 答案...</pre>
+
+        <label>NovelQA Model Analysis Detail:</label>
+        <pre id="novelQAModelAnalysisDetail">这里将显示 NovelQA 的 model_analysis_detail...</pre>
     </div>
 
+    <!-- Fact Validation Section -->
     <div class="container">
-        <label>来自 API 的答案:</label>
-        <div id="apiStatus" class="status"></div>
-        <pre id="apiResponse">这里将显示 API 的答案...</pre>
-    </div>
+        <h2>事实一致性校验测试</h2>
+        <p>用于校验上传文本与内部知识库的准确性。</p>
+        <label for="factValidationTxtFile">1. 上传你的 TXT 文件 (待校验材料):</label>
+        <input type="file" id="factValidationTxtFile" accept=".txt">
+        <!-- Optional: You could add an input for reference_excel_path if it's dynamic -->
+        <!-- <label for="factValidationExcelPath">2. 参考 Excel 路径 (可选，默认使用API配置):</label>
+        <input type="text" id="factValidationExcelPath" placeholder="../data/reference.xlsx"> -->
 
-    <!-- 新增的 model_analysis_detail 显示框 -->
-    <div class="container">
-        <label>Model Analysis Detail:</label>
-        <pre id="modelAnalysisDetail">这里将显示 model_analysis_detail...</pre>
+        <button onclick="sendFactValidationRequest()">发送事实一致性校验请求</button>
+
+        <!-- <label>发送到 API 的请求内容:</label>
+        <pre id="factValidationRequestContent">点击“发送事实一致性校验请求”后，这里将显示发送到 API 的 JSON 数据...</pre> -->
+
+
+        <label>来自 API 的事实校验结果:</label>
+        <div id="factValidationStatus" class="status"></div>
+        <pre id="factValidationResponse">这里将显示 API 的事实校验结果...</pre>
+
     </div>
 
     <script>
-        let fileContent = "";
+        let novelQATextContent = "";
+        let factValidationTextContent = "";
 
-        document.getElementById('txtFile').addEventListener('change', function (event) {
+        // --- Event Listeners for file uploads ---
+        document.getElementById('novelQATxtFile').addEventListener('change', function (event) {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function (e) {
-                    fileContent = e.target.result;
+                    novelQATextContent = e.target.result;
+                    console.log("NovelQA text file loaded.");
                 };
                 reader.readAsText(file);
             } else {
-                fileContent = "";
+                novelQATextContent = "";
             }
         });
 
-        function buildNovelQAPayloadString() {
-            const questionText = document.getElementById('question').value;
-
-            if (!fileContent) {
-                alert("请先上传一个 TXT 文件。");
-                return null;
+        document.getElementById('factValidationTxtFile').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    factValidationTextContent = e.target.result;
+                    console.log("Fact Validation text file loaded.");
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                factValidationTextContent = "";
             }
-            if (!questionText) {
-                alert("请输入您的问题。");
-                return null;
-            }
+        });
 
-            const novelQAPayload = {
-                text: fileContent,
-                question: questionText
-            };
-            return `NOVEL_QA_JSON::${JSON.stringify(novelQAPayload)}`;
-        }
-
-        function buildOpenAIChatPayload(novelQACommandString) {
-            if (!novelQACommandString) return null;
-
-            const openAIMessagePayload = {
-                model: "novel-qa-gemini-custom", // Target your specific model
-                messages: [
-                    {
-                        role: "user",
-                        content: novelQACommandString // The entire command string is the content
-                    }
-                ],
-                // stream: false // Explicitly set stream to false if not handled
-            };
-            return openAIMessagePayload;
-        }
-
-        async function sendRequest() {
+        // --- Helper function to send API requests ---
+        // 'analysisEl' is optional now, pass null if not needed
+        async function sendApiRequest(payload, statusEl, responseEl, analysisEl = null, requestContentEl = null) { // Added requestContentEl
             const apiUrl = document.getElementById('apiUrl').value;
-            const apiStatus = document.getElementById('apiStatus');
-            const apiResponseEl = document.getElementById('apiResponse');
-            const modelAnalysisDetailEl = document.getElementById('modelAnalysisDetail'); // 获取新的元素
 
-            apiStatus.textContent = "正在准备请求...";
-            apiResponseEl.textContent = "等待 API 响应...";
-            modelAnalysisDetailEl.textContent = "等待 API 响应..."; // 清空并设置默认文本
-
-            const novelQACommand = buildNovelQAPayloadString();
-            if (!novelQACommand) {
-                apiStatus.textContent = "请求准备失败。请检查输入。";
-                return;
+            statusEl.textContent = `正在发送请求到 ${apiUrl}...`;
+            responseEl.textContent = "等待 API 响应...";
+            if (analysisEl) { // Only update if analysisEl is provided
+                analysisEl.textContent = "等待 API 响应...";
             }
+            statusEl.classList.remove('error-message'); // Clear any previous error styling
 
-            const payload = buildOpenAIChatPayload(novelQACommand);
-            if (!payload) {
-                apiStatus.textContent = "请求体构建失败。";
-                return;
+            // Display the request content
+            if (requestContentEl) {
+                requestContentEl.textContent = JSON.stringify(payload, null, 2); // Format JSON nicely
             }
-
-            apiStatus.textContent = `正在发送请求到 ${apiUrl}...`;
 
             try {
                 const response = await fetch(apiUrl, {
@@ -203,39 +209,137 @@
                     body: JSON.stringify(payload)
                 });
 
-                apiStatus.textContent = `收到响应，状态: ${response.status} ${response.statusText}`;
+                statusEl.textContent = `收到响应，状态: ${response.status} ${response.statusText}`;
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    statusEl.textContent += ` (错误: ${errorText})`;
+                    statusEl.classList.add('error-message');
+                    responseEl.textContent = `API返回错误: ${errorText}`;
+                    if (analysisEl) {
+                        analysisEl.textContent = `无法获取分析详情：${errorText}`;
+                    }
+                    console.error('API Error Response:', errorText);
+                    return;
+                }
+
                 const responseData = await response.json();
 
-                let extractedContent = "未能从API响应中找到答案内容。"; // Default message if extraction fails
-                let extractedAnalysisDetail = "未能从API响应中找到 model_analysis_detail。"; // Default message for analysis
+                let extractedContent = "未能从API响应中找到答案内容。";
+                let extractedAnalysisDetail = "未能从API响应中找到 model_analysis_detail。";
 
-                // 尝试提取 content
                 if (responseData && responseData.choices && responseData.choices.length > 0 &&
                     responseData.choices[0].message && typeof responseData.choices[0].message.content === 'string') {
                     extractedContent = responseData.choices[0].message.content;
                 } else {
                     console.error("API response structure unexpected for content. Full response:", responseData);
                     extractedContent = "API响应结构不符合预期，未能找到答案内容。请查看浏览器控制台获取完整响应信息。";
+                    statusEl.classList.add('error-message');
                 }
 
-                // 尝试提取 model_analysis_detail
-                if (responseData && typeof responseData.model_analysis_detail === 'string') {
-                    extractedAnalysisDetail = responseData.model_analysis_detail;
-                } else {
-                    console.warn("model_analysis_detail not found or not a string in response. Full response:", responseData);
-                    extractedAnalysisDetail = "API响应中没有 'model_analysis_detail' 字段或其类型不正确。";
+                if (analysisEl) { // Only extract/display if analysisEl is provided
+                    if (responseData && (typeof responseData.model_analysis_detail === 'string' || typeof responseData.model_analysis_detail === 'object')) {
+                        extractedAnalysisDetail = JSON.stringify(responseData.model_analysis_detail, null, 2);
+                    } else {
+                        console.warn("model_analysis_detail not found or not a string/object in response. Full response:", responseData);
+                        extractedAnalysisDetail = "API响应中没有 'model_analysis_detail' 字段或其类型不正确。";
+                    }
+                    analysisEl.textContent = extractedAnalysisDetail;
                 }
 
-
-                apiResponseEl.textContent = extractedContent; // 显示提取的答案内容
-                modelAnalysisDetailEl.textContent = extractedAnalysisDetail; // 显示提取的分析详情
+                responseEl.textContent = extractedContent;
 
             } catch (error) {
-                apiStatus.textContent = `请求错误: ${error.message}`;
-                apiResponseEl.textContent = `错误详情: ${error.toString()}\n\n请检查 API 是否正在运行，URL 是否正确，以及是否存在 CORS 问题（查看浏览器控制台）。`;
-                modelAnalysisDetailEl.textContent = `无法获取分析详情：${error.toString()}`; // 错误时也更新分析框
+                statusEl.textContent = `请求错误: ${error.message}`;
+                statusEl.classList.add('error-message');
+                responseEl.textContent = `错误详情: ${error.toString()}\n\n请检查 API 是否正在运行，URL 是否正确，以及是否存在 CORS 问题（查看浏览器控制台）。`;
+                if (analysisEl) {
+                    analysisEl.textContent = `无法获取分析详情：${error.toString()}`;
+                }
                 console.error('API Request Error:', error);
             }
+        }
+
+        // --- NovelQA Specific Logic ---
+        function buildNovelQAPayloadString() {
+            const questionText = document.getElementById('novelQAQuestion').value;
+
+            if (!novelQATextContent) {
+                alert("NovelQA: 请先上传一个 TXT 文件作为上下文。");
+                return null;
+            }
+            if (!questionText) {
+                alert("NovelQA: 请输入您的问题。");
+                return null;
+            }
+
+            const novelQAPayload = {
+                text: novelQATextContent,
+                question: questionText
+            };
+            const jsonString = JSON.stringify(novelQAPayload).replace(/\\/g, '\\\\');
+            return `NOVEL_QA_JSON::${jsonString}`;
+        }
+
+        function buildOpenAIChatPayload(commandString, modelId) {
+            if (!commandString) return null;
+
+            const openAIMessagePayload = {
+                model: modelId,
+                messages: [
+                    {
+                        role: "user",
+                        content: commandString
+                    }
+                ],
+            };
+            return openAIMessagePayload;
+        }
+
+        async function sendNovelQARequest() {
+            const novelQACommand = buildNovelQAPayloadString();
+            if (!novelQACommand) return;
+
+            const payload = buildOpenAIChatPayload(novelQACommand, "novel-qa-gemini-custom");
+            if (!payload) return;
+
+            await sendApiRequest(
+                payload,
+                document.getElementById('novelQAStatus'),
+                document.getElementById('novelQAResponse'),
+                document.getElementById('novelQAModelAnalysisDetail') // Pass this for NovelQA
+            );
+        }
+
+        // --- Fact Validation Specific Logic ---
+        function buildFactValidationPayloadString() {
+            if (!factValidationTextContent) {
+                alert("事实校验: 请先上传一个 TXT 文件作为待校验材料。");
+                return null;
+            }
+
+            const factValidationPayload = {
+                text_to_validate: factValidationTextContent,
+                // reference_excel_path: document.getElementById('factValidationExcelPath').value || undefined
+            };
+            const jsonString = JSON.stringify(factValidationPayload);
+            return `FACT_VALIDATION_JSON::${jsonString}`;
+        }
+
+        async function sendFactValidationRequest() {
+            const factValidationCommand = buildFactValidationPayloadString();
+            if (!factValidationCommand) return;
+
+            const payload = buildOpenAIChatPayload(factValidationCommand, "fact-validation-gemini-custom");
+            if (!payload) return;
+
+            await sendApiRequest(
+                payload,
+                document.getElementById('factValidationStatus'),
+                document.getElementById('factValidationResponse'),
+                null, // Pass null for analysisEl, as it's not needed for Fact Validation
+                document.getElementById('factValidationRequestContent') // Pass the request content display element
+            );
         }
     </script>
 </body>
